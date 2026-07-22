@@ -1,17 +1,7 @@
-# Mass Store Generator plugin for BTCPayServer
+# BTCPayServer.Plugins.Tando
 
-This plugin allows you to generate multiple stores in your BTCPay Server instance. 
+Plugin project for the **Kenyan Merchant BTCPay PoS plugin** — mobile Point of Sale accepting both M-Pesa (via PSP) and Bitcoin (Lightning), two independent rails with no forced conversion.
 
+**The spec lives in the repository root [README](../../README.md)** — design principles, two-rail settlement model, LSP/PSP architecture, and the open pre-implementation items. Read it before touching this project.
 
-## Installation
-
-1. Install the plugin from Plugins=>Add New=> MassStoreGenerator
-2. Restart BTCPay Server
-3. On your BTCPay Server instance, select Stores Generator in the navigation. 
-4. You can then go ahead and add multiple stores by entering the store name and selecting the exchange providers for the different stores intended to be created
-
-
-![image](https://github.com/user-attachments/assets/79e6b9fb-85c5-44f6-a67e-ab0fbc9a66ce)
-
-
-
+**Current status (2026-07-22):** early implementation. The onboarding/store-creation slice is merged (PR #1, `ft/onboarding`); the remaining phases and the spec's open design decisions (node stack, LSP protocol, recovery, refunds, pricing, …) are still ahead.

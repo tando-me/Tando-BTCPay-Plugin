@@ -1,6 +1,9 @@
 using BTCPayServer.Abstractions.Contracts;
 using BTCPayServer.Abstractions.Models;
 using BTCPayServer.Abstractions.Services;
+using BTCPayServer.Models.ServerViewModels;
+using BTCPayServer.Plugins.MassStoreGenerator;
+using BTCPayServer.Plugins.Tando.Services;
 using BTCPayServer.Plugins.Template.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -17,5 +20,13 @@ public class Plugin : BaseBTCPayServerPlugin
     {
         services.AddSingleton<IUIExtension>(new UIExtension("TandoPluginHeaderNav", "header-nav"));
         services.AddHostedService<ApplicationPartsLogger>();
+
+        services.AddSingleton<TandoSubscriptionService>();
+        services.AddSingleton(new ServicesViewModel.OtherExternalService()
+        {
+            Name = "Tando",
+            ControllerName = "UITandoSettings",
+            ActionName = nameof(UITandoSettingsController.Settings)
+        });
     }
 }

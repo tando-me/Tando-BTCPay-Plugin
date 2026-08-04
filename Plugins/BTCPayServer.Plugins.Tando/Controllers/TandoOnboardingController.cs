@@ -152,7 +152,10 @@ public class TandoOnboardingController(StoreRepository storeRepository, TandoSub
         if (string.IsNullOrWhiteSpace(request?.ConnectionString))
             return BadRequest(new { error = "connection_string_required" });
 
-        var store = await storeRepository.FindStore(storeId);
+        var callerId = User.GetId();
+        var ownedStores = await storeRepository.GetStoresByUserId(callerId);
+        // 404, not 403: don't reveal to a non-owner whether storeId exists at all.
+        var store = ownedStores.FirstOrDefault(s => s.Id == storeId);
         if (store is null)
             return NotFound(new { error = "store_not_found" });
 

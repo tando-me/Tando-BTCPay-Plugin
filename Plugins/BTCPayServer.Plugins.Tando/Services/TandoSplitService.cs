@@ -35,7 +35,6 @@ public class TandoSplitService(InvoiceRepository invoiceRepository, TandoMerchan
 
         var splitConfig = await merchantSettingsService.GetSplitConfig(storeId);
         var mpesaSettings = await merchantSettingsService.GetMpesaSettings(storeId);
-
         var mpesaPortion = Math.Round(invoice.Price * (splitConfig.MpesaPercentage / 100m), 2);
         var record = new TandoSplitRecord
         {
@@ -46,10 +45,9 @@ public class TandoSplitService(InvoiceRepository invoiceRepository, TandoMerchan
             MpesaPercentage = splitConfig.MpesaPercentage,
             MpesaDestinationType = mpesaSettings?.DestinationType,
             MpesaDestination = mpesaSettings?.Destination,
-            MpesaSettled = mpesaPortion <= 0, // nothing to settle if the split routes 0% to M-Pesa
+            MpesaSettled = mpesaPortion <= 0,
             RecordedAt = DateTimeOffset.UtcNow
         };
-
         await invoiceRepository.UpdateInvoiceMetadata(invoiceId, SplitMetadataKey, record);
         return (record, null);
     }
@@ -81,6 +79,5 @@ public class TandoSplitService(InvoiceRepository invoiceRepository, TandoMerchan
         return (true, null);
     }
 
-    private static TandoSplitRecord? GetRecord(InvoiceEntity invoice)
-        => invoice.Metadata?.GetAdditionalData<TandoSplitRecord>(SplitMetadataKey);
+    private static TandoSplitRecord? GetRecord(InvoiceEntity invoice) => invoice.Metadata?.GetAdditionalData<TandoSplitRecord>(SplitMetadataKey);
 }

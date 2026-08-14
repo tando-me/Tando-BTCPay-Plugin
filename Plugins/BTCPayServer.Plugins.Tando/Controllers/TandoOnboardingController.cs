@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using BTCPayServer.Abstractions.Constants;
@@ -9,6 +8,7 @@ using BTCPayServer.Client;
 using BTCPayServer.Data;
 using BTCPayServer.Payments;
 using BTCPayServer.Payments.Lightning;
+using BTCPayServer.Plugins.Tando.Helper;
 using BTCPayServer.Plugins.Tando.Services;
 using BTCPayServer.Plugins.Tando.ViewModels;
 using BTCPayServer.Services.Stores;
@@ -29,13 +29,12 @@ public class TandoOnboardingController(StoreRepository storeRepository, TandoSub
     private const string PhoneMetadataKey = "tandoPhoneNumber";
     private const string PlanMetadataKey = "tandoSubscriptionPlanId";
 
-    private static readonly Regex KenyanMsisdn = new(@"^(?:\+254|0)([17]\d{8})$", RegexOptions.Compiled);
-
     [HttpGet("subscription/status")]
     public async Task<IActionResult> SubscriptionStatus([FromQuery] string phoneNumber)
     {
-        var normalizedPhone = NormalizePhone(phoneNumber, out var error);
-        if (normalizedPhone is null) return error!;
+        var normalizedPhone = KenyanPhoneNumber.Normalize(phoneNumber);
+        if (normalizedPhone == null)
+            return BadRequest(new { error = "invalid_phone_number", detail = "Expected a Kenyan MSISDN, e.g. 0712345678 or +254712345678." });
 
         var status = await subscriptionService.GetStatus(normalizedPhone);
         return Ok(status);
@@ -57,8 +56,9 @@ public class TandoOnboardingController(StoreRepository storeRepository, TandoSub
         if (string.IsNullOrWhiteSpace(request?.PhoneNumber))
             return BadRequest(new { error = "phone_number_required" });
 
-        var normalizedPhone = NormalizePhone(request.PhoneNumber, out var error);
-        if (normalizedPhone is null) return error!;
+        var normalizedPhone = KenyanPhoneNumber.Normalize(request.PhoneNumber);
+        if (normalizedPhone is null)
+            return BadRequest(new { error = "invalid_phone_number", detail = "Expected a Kenyan MSISDN, e.g. 0712345678 or +254712345678." });
 
         var status = await subscriptionService.GetStatus(normalizedPhone);
         if (!status.Configured)
@@ -132,18 +132,6 @@ public class TandoOnboardingController(StoreRepository storeRepository, TandoSub
         blob.AdditionalData[PlanMetadataKey] = currentPlanId;
         store.SetStoreBlob(blob);
         await storeRepository.UpdateStore(store);
-    }
-
-    private string? NormalizePhone(string phoneNumber, out IActionResult? error)
-    {
-        var match = KenyanMsisdn.Match((phoneNumber ?? string.Empty).Trim());
-        if (!match.Success)
-        {
-            error = BadRequest(new { error = "invalid_phone_number", detail = "Expected a Kenyan MSISDN, e.g. 0712345678 or +254712345678." });
-            return null;
-        }
-        error = null;
-        return "254" + match.Groups[1].Value;
     }
 
     [HttpPut("stores/{storeId}/lightning/connect")]

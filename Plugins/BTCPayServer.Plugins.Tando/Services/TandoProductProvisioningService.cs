@@ -1,4 +1,5 @@
 ﻿#nullable enable
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using BTCPayServer.Data;
@@ -64,5 +65,61 @@ public class TandoProductProvisioningService(ApplicationDbContextFactory dbConte
         app.SetSettings(settings);
         await appService.UpdateOrCreateApp(app);
         return app.Id;
+    }
+
+    public async Task<Client.Models.AppItem[]> ListProducts(string storeId)
+    {
+        var (posAppId, cartAppId) = await GetExistingAppIds(storeId);
+        var appId = cartAppId ?? posAppId;
+        if (appId is null) return [];
+
+        var app = await appService.GetApp(appId, PointOfSaleAppType.AppType);
+        if (app is null) return [];
+
+        var settings = app.GetSettings<PointOfSaleSettings>();
+        return AppService.Parse(settings.Template, includeDisabled: true);
+    }
+
+    public async Task<Client.Models.AppItem> AddProduct(string storeId, string name, decimal price, string? imageUrl)
+    {
+        var item = new Client.Models.AppItem
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Title = name,
+            Price = price,
+            PriceType = Client.Models.AppItemPriceType.Fixed,
+            Image = imageUrl
+        };
+        await MutateBothApps(storeId, items => [.. items, item]);
+        return item;
+    }
+
+    public async Task<bool> RemoveProduct(string storeId, string itemId)
+    {
+        var removed = false;
+        await MutateBothApps(storeId, items =>
+        {
+            var filtered = items.Where(i => i.Id != itemId).ToArray();
+            removed = filtered.Length != items.Length;
+            return filtered;
+        });
+        return removed;
+    }
+    private async Task MutateBothApps(string storeId, Func<Client.Models.AppItem[], Client.Models.AppItem[]> mutate)
+    {
+        var (posAppId, cartAppId) = await GetExistingAppIds(storeId);
+        foreach (var appId in new[] { posAppId, cartAppId })
+        {
+            if (appId is null) continue;
+
+            var app = await appService.GetApp(appId, PointOfSaleAppType.AppType);
+            if (app is null) continue;
+
+            var settings = app.GetSettings<PointOfSaleSettings>();
+            var items = AppService.Parse(settings.Template, includeDisabled: true);
+            settings.Template = AppService.SerializeTemplate(mutate(items));
+            app.SetSettings(settings);
+            await appService.UpdateOrCreateApp(app);
+        }
     }
 }

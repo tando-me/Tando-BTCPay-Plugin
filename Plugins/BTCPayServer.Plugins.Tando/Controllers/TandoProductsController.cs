@@ -47,7 +47,7 @@ public class TandoProductsController(TandoProductProvisioningService productProv
         return Ok();
     }
 
-    private static TandoProductResponse ToResponse(BTCPayServer.Client.Models.AppItem item) => new()
+    private static TandoProductResponse ToResponse(Client.Models.AppItem item) => new()
     {
         Id = item.Id,
         Name = item.Title,

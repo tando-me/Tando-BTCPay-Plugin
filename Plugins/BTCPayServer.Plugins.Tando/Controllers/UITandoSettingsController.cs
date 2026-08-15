@@ -1,8 +1,11 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using BTCPayServer.Abstractions.Constants;
 using BTCPayServer.Client;
+using BTCPayServer.Plugins.Subscriptions.Controllers;
 using BTCPayServer.Plugins.Tando.Services;
 using BTCPayServer.Plugins.Tando.ViewModels;
 using Microsoft.AspNetCore.Authorization;
@@ -17,12 +20,16 @@ namespace BTCPayServer.Plugins.Tando;
 public class UITandoSettingsController(TandoSubscriptionService subscriptionService, IStringLocalizer stringLocalizer) : Controller
 {
     private IStringLocalizer StringLocalizer { get; } = stringLocalizer;
+    private const string SpecResourceName = "BTCPayServer.Plugins.Tando.Resources.tando-openapi.yaml";
+    private const string SwaggerUiBundleResourceName = "BTCPayServer.Plugins.Tando.Resources.SwaggerUi.swagger-ui-bundle.js";
+    private const string SwaggerUiCssResourceName = "BTCPayServer.Plugins.Tando.Resources.SwaggerUi.swagger-ui.css";
+    private const string SwaggerUiInitResourceName = "BTCPayServer.Plugins.Tando.Resources.SwaggerUi.tando-docs-init.js";
 
     [HttpGet]
     public async Task<IActionResult> Settings(string? offeringId = null)
     {
         ViewData["ActivePage"] = "Tando";
-        return View(await BuildViewModel(offeringId, null));
+        return View(await BuildViewModel(offeringId, null, null));
     }
 
     [HttpPost]
@@ -32,31 +39,45 @@ public class UITandoSettingsController(TandoSubscriptionService subscriptionServ
         if (string.IsNullOrEmpty(model.SubscriptionOfferingId))
         {
             ModelState.AddModelError(nameof(model.SubscriptionOfferingId), StringLocalizer["Select a subscription offering"]);
-            return View(await BuildViewModel(model.SubscriptionOfferingId, model.SubscriptionPlanId));
+            return View(await BuildViewModel(model.SubscriptionOfferingId, model.SubscriptionPlanId, model.FallbackSubscriptionPlanId));
         }
 
         var activePlans = await subscriptionService.GetActivePlans(model.SubscriptionOfferingId);
         if (activePlans.Length == 0)
         {
             ModelState.AddModelError(nameof(model.SubscriptionOfferingId), StringLocalizer["This offering has no active plans yet. Add at least one active plan to it before selecting it here."]);
-            return View(await BuildViewModel(model.SubscriptionOfferingId, model.SubscriptionPlanId));
+            return View(await BuildViewModel(model.SubscriptionOfferingId, model.SubscriptionPlanId, model.FallbackSubscriptionPlanId));
         }
 
         if (string.IsNullOrEmpty(model.SubscriptionPlanId) || activePlans.All(p => p.Id != model.SubscriptionPlanId))
         {
             ModelState.AddModelError(nameof(model.SubscriptionPlanId), StringLocalizer["Select the plan merchants should be tied to"]);
-            return View(await BuildViewModel(model.SubscriptionOfferingId, model.SubscriptionPlanId));
+            return View(await BuildViewModel(model.SubscriptionOfferingId, model.SubscriptionPlanId, model.FallbackSubscriptionPlanId));
+        }
+        if (!string.IsNullOrEmpty(model.FallbackSubscriptionPlanId))
+        {
+            if (model.FallbackSubscriptionPlanId == model.SubscriptionPlanId)
+            {
+                ModelState.AddModelError(nameof(model.FallbackSubscriptionPlanId), StringLocalizer["Fallback plan must be different from the primary plan"]);
+                return View(await BuildViewModel(model.SubscriptionOfferingId, model.SubscriptionPlanId, model.FallbackSubscriptionPlanId));
+            }
+            if (activePlans.All(p => p.Id != model.FallbackSubscriptionPlanId))
+            {
+                ModelState.AddModelError(nameof(model.FallbackSubscriptionPlanId), StringLocalizer["Selected fallback plan is not an active plan on this offering"]);
+                return View(await BuildViewModel(model.SubscriptionOfferingId, model.SubscriptionPlanId, model.FallbackSubscriptionPlanId));
+            }
         }
         await subscriptionService.SaveSettings(new TandoSettings
         {
             SubscriptionOfferingId = model.SubscriptionOfferingId,
-            SubscriptionPlanId = model.SubscriptionPlanId
+            SubscriptionPlanId = model.SubscriptionPlanId,
+            FallbackSubscriptionPlanId = string.IsNullOrEmpty(model.FallbackSubscriptionPlanId) ? null : model.FallbackSubscriptionPlanId
         });
         TempData[WellKnownTempData.SuccessMessage] = StringLocalizer["Tando settings updated"].Value;
         return RedirectToAction(nameof(Settings));
     }
 
-    private async Task<TandoSettingsViewModel> BuildViewModel(string? selectedOfferingId, string? selectedPlanId)
+    private async Task<TandoSettingsViewModel> BuildViewModel(string? selectedOfferingId, string? selectedPlanId, string? selectedFallbackPlanId)
     {
         var settings = await subscriptionService.GetSettings();
         var offerings = await subscriptionService.GetAllOfferings();
@@ -65,7 +86,7 @@ public class UITandoSettingsController(TandoSubscriptionService subscriptionServ
         string? createOfferingUrl = null;
         var currentStoreId = HttpContext.GetUserPrefsCookie().CurrentStoreId;
         if (!string.IsNullOrEmpty(currentStoreId))
-            createOfferingUrl = Url.Action("CreateOffering", "UIOffering", new { area = "Subscriptions", storeId = currentStoreId });
+            createOfferingUrl = Url.Action(nameof(UIOfferingController.CreateOffering), "UIOffering", new { area = "Subscriptions", storeId = currentStoreId });
 
         var planItems = new List<SelectListItem>();
         if (!string.IsNullOrEmpty(offeringId))
@@ -77,9 +98,74 @@ public class UITandoSettingsController(TandoSubscriptionService subscriptionServ
         {
             SubscriptionOfferingId = offeringId,
             SubscriptionPlanId = selectedPlanId ?? settings.SubscriptionPlanId,
+            FallbackSubscriptionPlanId = selectedFallbackPlanId ?? settings.FallbackSubscriptionPlanId,
             Offerings = offerings.Select(o => new SelectListItem($"{o.Name} ({o.StoreName})", o.Id)).ToList(),
             Plans = planItems,
             CreateOfferingUrl = createOfferingUrl
         };
+    }
+
+    [HttpGet("swagger-ui/swagger-ui-bundle.js")]
+    [AllowAnonymous]
+    public IActionResult SwaggerUiBundle() => ServeEmbeddedResource(SwaggerUiBundleResourceName, "application/javascript");
+
+    [HttpGet("swagger-ui/swagger-ui.css")]
+    [AllowAnonymous]
+    public IActionResult SwaggerUiCss() => ServeEmbeddedResource(SwaggerUiCssResourceName, "text/css");
+
+    [HttpGet("swagger-ui/init.js")]
+    [AllowAnonymous]
+    public IActionResult SwaggerUiInit() => ServeEmbeddedResource(SwaggerUiInitResourceName, "application/javascript");
+
+    [HttpGet("debug-resources")]
+    [AllowAnonymous]
+    public IActionResult DebugResources() => Ok(Assembly.GetExecutingAssembly().GetManifestResourceNames());
+
+
+    [HttpGet("openapi.yaml")]
+    [AllowAnonymous]
+    public IActionResult OpenApiSpec()
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+        using var stream = assembly.GetManifestResourceStream(SpecResourceName);
+        if (stream is null)
+            return NotFound();
+
+        using var reader = new StreamReader(stream);
+        return Content(reader.ReadToEnd(), "application/yaml");
+    }
+
+    [HttpGet("docs")]
+    public IActionResult Docs()
+    {
+        var specUrl = Url.Action(nameof(OpenApiSpec));
+        var bundleUrl = Url.Action(nameof(SwaggerUiBundle));
+        var cssUrl = Url.Action(nameof(SwaggerUiCss));
+        var initUrl = Url.Action(nameof(SwaggerUiInit));
+        var html = $$"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Tando API Docs</title>
+            <link rel="stylesheet" href="{{cssUrl}}" />
+            <style>body { margin: 0; }</style>
+        </head>
+        <body>
+            <div id="swagger-ui" data-spec-url="{{specUrl}}"></div>
+            <script src="{{bundleUrl}}"></script>
+            <script src="{{initUrl}}"></script>
+        </body>
+        </html>
+        """;
+        return Content(html, "text/html");
+    }
+
+    private static IActionResult ServeEmbeddedResource(string resourceName, string contentType)
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+        var stream = assembly.GetManifestResourceStream(resourceName);
+        return stream is null
+            ? new NotFoundResult()
+            : new FileStreamResult(stream, contentType);
     }
 }

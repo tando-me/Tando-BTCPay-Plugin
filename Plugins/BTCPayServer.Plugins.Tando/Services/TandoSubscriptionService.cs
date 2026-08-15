@@ -56,21 +56,19 @@ public class TandoSubscriptionService(ApplicationDbContextFactory dbContextFacto
         var settings = await GetSettings();
         var offeringId = settings.SubscriptionOfferingId;
         var designatedPlanId = settings.SubscriptionPlanId;
-        if (string.IsNullOrEmpty(offeringId) || string.IsNullOrEmpty(designatedPlanId))
+        if (string.IsNullOrEmpty(offeringId))
             return new TandoSubscriptionStatus(false, false, null, null);
 
         await using var ctx = dbContextFactory.CreateContext();
-        var offering = await ctx.Offerings.GetOfferingData(offeringId);
-        var designatedPlan = offering?.Plans.FirstOrDefault(p => p.Id == designatedPlanId && p.Status == PlanData.PlanStatus.Active);
-        if (designatedPlan is null)
-            return new TandoSubscriptionStatus(false, false, null, null);
-
         var subscriber = await ctx.Subscribers.GetBySelector(offeringId, CustomerSelector.ByExternalRef(normalizedPhone));
         if (subscriber is null)
-            return new TandoSubscriptionStatus(false, true, designatedPlanId, null);
-
+        {
+            var offering = await ctx.Offerings.GetOfferingData(offeringId);
+            var designatedPlan = offering?.Plans.FirstOrDefault(p => p.Id == designatedPlanId && p.Status == PlanData.PlanStatus.Active);
+            return designatedPlan is null ? new TandoSubscriptionStatus(false, false, null, null) : new TandoSubscriptionStatus(false, true, designatedPlanId, null);
+        }
         return new TandoSubscriptionStatus(
-            Active: subscriber is { IsActive: true, IsSuspended: false } && subscriber.PlanId == designatedPlanId,
+            Active: subscriber is { IsActive: true, IsSuspended: false },
             Configured: true,
             PlanId: subscriber.PlanId,
             Phase: subscriber.Phase.ToString());

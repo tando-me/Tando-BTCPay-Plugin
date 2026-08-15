@@ -40,11 +40,29 @@
                         </select>
                         <span asp-validation-for="SubscriptionPlanId" class="text-danger"></span>
                     </div>
+
+                    <div class="form-group mb-3">
+                        <label asp-for="FallbackSubscriptionPlanId" class="form-label" text-translate="true">Fallback plan (optional)</label>
+                        <select asp-for="FallbackSubscriptionPlanId" asp-items="Model.Plans" class="form-select w-auto">
+                            <option value="" text-translate="true">None</option>
+                        </select>
+                        <span asp-validation-for="FallbackSubscriptionPlanId" class="text-danger"></span>
+                        <div class="form-text" text-translate="true">
+                            Only used if the plan above gets deleted or retired - new signups are automatically
+                            switched to this plan instead. Merchants already subscribed are never moved.
+                        </div>
+                    </div>
                 }
                 else if (!string.IsNullOrEmpty(Model.SubscriptionOfferingId))
                 {
                     <div class="alert alert-warning" role="alert" text-translate="true">The selected offering has no active plans yet. Add a plan to continue.</div>
                 }
+
+                <div class="form-group mb-3">
+                    <label asp-for="TreasuryLightningAddress" class="form-label" text-translate="true">Treasury Lightning address</label>
+                    <input asp-for="TreasuryLightningAddress" class="form-control" placeholder="payouts@yourdomain.com" />
+                    <span asp-validation-for="TreasuryLightningAddress" class="text-danger"></span>
+                </div>
 
                 <button id="page-primary" type="submit" class="btn btn-primary" text-translate="true">Save</button>
             </form>

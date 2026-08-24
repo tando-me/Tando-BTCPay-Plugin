@@ -206,6 +206,10 @@ Corner case: what happens if the merchant loses the passkey too (Google/Apple ac
 - iOS foreground behavior when the app is inactive (PushKit VOIP vs async-receive)
 - Corridor config file format and PSP adapter interface spec
 
+## Development
+
+To run BTCPay Server locally with the Tando plugin loaded (regtest, with test Lightning payments), see [docs/Setup.md](docs/Setup.md).
+
 ## Contributing
 
 Design and implementation are in early stages. Issues and discussions welcome via the repository's Issues tab.

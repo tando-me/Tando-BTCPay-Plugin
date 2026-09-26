@@ -32,7 +32,7 @@ public class Plugin : BaseBTCPayServerPlugin
         services.AddSingleton<ITandoLightningProvisioner, NwcLightningProvisioner>();
         services.AddSingleton<ITandoLightningProvisioner, PhoenixdLightningProvisioner>();
         services.AddSingleton<ITandoMpesaPayoutClient, UnconfiguredTandoMpesaPayoutClient>();
-        services.AddSingleton<ILightningConnectionStringHandler, NwcLightningConnectionStringHandler>();
+        services.AddTandoPhoneVerification();
         services.AddSingleton(new ServicesViewModel.OtherExternalService()
         {
             Name = "Tando",

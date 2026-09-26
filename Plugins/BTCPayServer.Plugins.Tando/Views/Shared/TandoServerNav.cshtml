@@ -9,3 +9,11 @@
        asp-action="Settings"
        text-translate="true">Tando Business</a>
 </li>
+<li permission="@Policies.CanModifyServerSettings">
+    <a id="menu-item-TandoDaraja"
+       class="dropdown-item@(ViewData["ActivePage"]?.ToString() == "TandoDarajaSettings" ? " active" : "")"
+       asp-area=""
+       asp-controller="UITandoDaraja"
+       asp-action="Settings"
+       text-translate="true">Tando Daraja</a>
+</li>

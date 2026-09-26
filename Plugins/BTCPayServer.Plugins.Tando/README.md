@@ -5,3 +5,11 @@ Plugin project for the **Kenyan Merchant BTCPay PoS plugin** — mobile Point of
 **The spec lives in the repository root [README](../../README.md)** — design principles, two-rail settlement model, LSP/PSP architecture, and the open pre-implementation items. Read it before touching this project.
 
 **Current status (2026-07-22):** early implementation. The onboarding/store-creation slice is merged (PR #1, `ft/onboarding`); the remaining phases and the spec's open design decisions (node stack, LSP protocol, recovery, refunds, pricing, …) are still ahead.
+
+
+### Signup phone verification
+
+Both signup requests validate the normalized Safaricom number against the supplied
+ID before subscription or store creation. Daraja is the production provider.
+An explicit Development-only provider supports deterministic signup tests without
+Daraja credentials. See [Mock testing](../../docs/MockTesting.md).

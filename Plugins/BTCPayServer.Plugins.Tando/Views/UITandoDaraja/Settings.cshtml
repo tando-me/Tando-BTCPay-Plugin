@@ -1,0 +1,38 @@
+@using BTCPayServer.Abstractions.Extensions
+@using BTCPayServer.Abstractions.Models
+@model BTCPayServer.Plugins.Tando.Services.TandoDarajaSettings
+@{
+    ViewData.SetLayoutModel(new LayoutModel("TandoDarajaSettings", "Tando Daraja Settings"));
+}
+
+<h1>Daraja Mobile Number Validation</h1>
+<partial name="_StatusMessage" />
+
+<p>
+    Credentials of a Daraja app created on the
+    <a href="https://developer.safaricom.co.ke" target="_blank" rel="noreferrer noopener">Safaricom Developer Portal</a>.
+    When configured, Tando signup validates the merchant's phone number against their ID
+    using Safaricom's Mobile Number Validation API before creating a store.
+</p>
+
+<form method="post" asp-action="Settings" class="mt-4" style="max-width: 500px;">
+    <div class="form-group mb-3">
+        <label asp-for="ConsumerKey" class="form-label"></label>
+        <input asp-for="ConsumerKey" class="form-control" autocomplete="off" />
+    </div>
+    <div class="form-group mb-3">
+        <label asp-for="ConsumerSecret" class="form-label"></label>
+        <input asp-for="ConsumerSecret" type="password" class="form-control" autocomplete="new-password" value="@Model.ConsumerSecret" />
+    </div>
+    <div class="form-group mb-3">
+        <label asp-for="ShortCode" class="form-label"></label>
+        <input asp-for="ShortCode" class="form-control" />
+        <div class="form-text">The pay bill / till short code associated with your Daraja app.</div>
+    </div>
+    <div class="form-check mb-4">
+        <input asp-for="UseSandbox" type="checkbox" class="form-check-input" />
+        <label asp-for="UseSandbox" class="form-check-label"></label>
+        <div class="form-text">Sandbox targets sandbox.safaricom.co.ke; production requires go-live approval and a commercial agreement with Safaricom.</div>
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+</form>

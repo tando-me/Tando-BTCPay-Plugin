@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsTestProject>true</IsTestProject>
+    <Nullable>enable</Nullable>
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <ProjectReference Include="../../Plugins/BTCPayServer.Plugins.Tando/BTCPayServer.Plugins.Tando.csproj" AdditionalProperties="StaticWebAssetsEnabled=false" />
+    <ProjectReference Include="../../btcpayserver/BTCPayServer/BTCPayServer.csproj" AdditionalProperties="StaticWebAssetsEnabled=false" />
+  </ItemGroup>
+</Project>

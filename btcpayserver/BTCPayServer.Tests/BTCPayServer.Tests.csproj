@@ -68,6 +68,7 @@
   <ItemGroup>
     <ProjectReference Include="..\BTCPayServer.Rating\BTCPayServer.Rating.csproj" />
     <ProjectReference Include="..\BTCPayServer\BTCPayServer.csproj" />
+    <ProjectReference Include="..\..\Plugins\BTCPayServer.Plugins.Tando\BTCPayServer.Plugins.Tando.csproj" />
   </ItemGroup>
 
   <ItemGroup>

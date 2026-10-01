@@ -33,6 +33,8 @@ public class Plugin : BaseBTCPayServerPlugin
         services.AddSingleton<ITandoLightningProvisioner, PhoenixdLightningProvisioner>();
         services.AddSingleton<ITandoMpesaPayoutClient, UnconfiguredTandoMpesaPayoutClient>();
         services.AddSingleton<ILightningConnectionStringHandler, NwcLightningConnectionStringHandler>();
+        services.AddTandoPhoneVerification();
+        services.AddDarajaPhoneVerification(); // Comment out to sign up without phone verification.
         services.AddSingleton(new ServicesViewModel.OtherExternalService()
         {
             Name = "Tando",

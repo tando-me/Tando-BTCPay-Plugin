@@ -6,6 +6,8 @@ public class TandoSignupRequest
 {
     [Required]
     public string PhoneNumber { get; set; }
+    public string IdNumber { get; set; }
+    public string IdType { get; set; } = "01";
 }
 
 public class TandoSignupResponse
@@ -15,4 +17,5 @@ public class TandoSignupResponse
     public bool AlreadyExisted { get; set; }
     public string? PosAppId { get; set; }
     public string? CartAppId { get; set; }
+    public bool PhoneNumberVerified { get; set; }
 }

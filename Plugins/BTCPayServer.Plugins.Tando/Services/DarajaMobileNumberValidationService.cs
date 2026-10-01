@@ -25,6 +25,9 @@ public class DarajaMobileNumberValidationService(
 
     // Cache key is credential-specific so an in-flight token fetch for old credentials
     // cannot overwrite the slot after a settings change clears it.
+    public override string Mode => "Daraja";
+    public override async Task<bool> IsConfigured() => (await GetSettings()).IsConfigured();
+
     private static string TokenCacheKeyFor(TandoDarajaSettings s)
     {
         var raw = Encoding.UTF8.GetBytes($"{s.ConsumerKey}:{s.ConsumerSecret}:{s.UseSandbox}");

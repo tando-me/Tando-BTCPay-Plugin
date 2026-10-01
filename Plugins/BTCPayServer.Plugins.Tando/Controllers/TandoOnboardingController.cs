@@ -29,8 +29,7 @@ public class TandoOnboardingController(
     TandoSubscriptionService subscriptionService,
     TandoProductProvisioningService productProvisioningService,
     TandoLightningProvisionerFactory lightningProvisionerFactor,
-    PhoneVerificationProvider phoneVerification,
-    DarajaMobileNumberValidationService darajaValidation
+    PhoneVerificationProvider phoneVerification
 ) : Controller
 {
     private const string PreferredRateSource = "bitcoinkenya";
@@ -59,54 +58,33 @@ public class TandoOnboardingController(
         return Ok(new { configured = true, plans });
     }
 
-    [HttpGet("daraja/status")]
-    public async Task<IActionResult> DarajaStatus()
+
+    [HttpGet("verification/status")]
+    public async Task<IActionResult> VerificationStatus()
     {
-        var settings = await darajaValidation.GetSettings();
         return Ok(new
         {
-            configured = settings.IsConfigured(),
-            environment = settings.IsConfigured() ? (settings.UseSandbox ? "sandbox" : "production") : (string?)null,
+            enabled = phoneVerification.Enabled,
+            mode = phoneVerification.Mode,
+            mock = phoneVerification.IsMock,
+            configured = await phoneVerification.IsConfigured(),
         });
     }
 
-    /// Verify identity before the existing trial subscription and store creation flow.
     [HttpPost("signup")]
-    public async Task<IActionResult> Signup(
-        [FromBody] TandoSignupRequest request,
-        CancellationToken cancellationToken
-    )
+    public async Task<IActionResult> Signup([FromBody] TandoSignupRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request?.PhoneNumber))
             return BadRequest(
-                new
-                {
-                    error = "phone_number_required",
-                    message = "A Safaricom phone number is required to sign up.",
-                }
-            );
-
-        if (string.IsNullOrWhiteSpace(request.IdNumber))
-            return BadRequest(
-                new
-                {
-                    error = "id_number_required",
-                    message = "Your National ID or Passport number is required for mobile number verification.",
-                }
-            );
+                new{ error = "phone_number_required", message = "A Safaricom phone number is required to sign up." });
 
         var normalizedPhone = NormalizePhone(request.PhoneNumber, out var error);
         if (normalizedPhone is null)
             return error!;
 
-        // KYC runs first — an invalid phone/ID pair is rejected before anything else.
-        var (phoneNumberVerified, kycError) = await ValidateKyc(
-            normalizedPhone,
-            request.IdNumber,
-            request.IdType
-        );
-        if (kycError is not null)
-            return kycError;
+        var validateKycResponse = await ValidateKyc(normalizedPhone, request.IdNumber, request.IdType);
+        if (validateKycResponse.error is not null)
+            return validateKycResponse.error;
 
         var status = await subscriptionService.GetStatus(normalizedPhone);
 
@@ -124,7 +102,7 @@ public class TandoOnboardingController(
             return await CreateOrReturnStore(
                 normalizedPhone,
                 status,
-                phoneNumberVerified,
+                validateKycResponse.verified,
                 cancellationToken
             );
 
@@ -147,32 +125,25 @@ public class TandoOnboardingController(
         return await CreateOrReturnStore(
             normalizedPhone,
             status,
-            phoneNumberVerified,
+            validateKycResponse.verified,
             cancellationToken
         );
     }
 
-    /// Runs Daraja Mobile Number Validation KYC.
-    /// Returns (true, null) only after successful verification,
-    /// or (false, errorResult) when the phone/ID pair is rejected or the API is unavailable.
-    private async Task<(bool verified, IActionResult? error)> ValidateKyc(
-        string normalizedPhone,
-        string idNumber,
-        string idType
-    )
+    private async Task<(bool verified, IActionResult? error)> ValidateKyc(string normalizedPhone, string idNumber, string idType)
     {
-        var idTypeTrimmed = string.IsNullOrWhiteSpace(idType) ? "01" : idType.Trim();
-        if (idTypeTrimmed is not ("01" or "02" or "05"))
-            return (
-                false,
-                BadRequest(
-                    new
-                    {
-                        error = "invalid_id_type",
-                        message = "id_type must be 01 (National ID), 02 (Military ID), or 05 (Passport).",
-                    }
-                )
+        if (!phoneVerification.Enabled)
+            return (false, null);
+
+        if (string.IsNullOrWhiteSpace(idNumber))
+            return (false, BadRequest(new
+                {
+                    error = "id_number_required",
+                    message = "Your National ID or Passport number is required for mobile number verification.",
+                })
             );
+
+        var idTypeTrimmed = string.IsNullOrWhiteSpace(idType) ? "01" : idType.Trim();
 
         var validation = await phoneVerification.ValidateMobileNumber(
             normalizedPhone,

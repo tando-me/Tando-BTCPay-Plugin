@@ -32,7 +32,10 @@ public class Plugin : BaseBTCPayServerPlugin
         services.AddSingleton<ITandoLightningProvisioner, NwcLightningProvisioner>();
         services.AddSingleton<ITandoLightningProvisioner, PhoenixdLightningProvisioner>();
         services.AddSingleton<ITandoMpesaPayoutClient, UnconfiguredTandoMpesaPayoutClient>();
+        services.AddSingleton<ILightningConnectionStringHandler, NwcLightningConnectionStringHandler>();
         services.AddTandoPhoneVerification();
+        // Safaricom Daraja ID check on signup. Comment out to sign up without phone verification.
+        services.AddTandoDarajaPhoneVerification();
         services.AddSingleton(new ServicesViewModel.OtherExternalService()
         {
             Name = "Tando",

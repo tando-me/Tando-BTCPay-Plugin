@@ -6,11 +6,7 @@ public class TandoSignupRequest
 {
     [Required]
     public string PhoneNumber { get; set; }
-
-    [Required]
     public string IdNumber { get; set; }
-
-    /// <summary>01 = National ID (default), 02 = Military ID, 05 = Passport</summary>
     public string IdType { get; set; } = "01";
 }
 

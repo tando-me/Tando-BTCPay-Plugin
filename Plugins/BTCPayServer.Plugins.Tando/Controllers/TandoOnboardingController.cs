@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using BTCPayServer.Plugins.Tando.Helper;
 using System.Threading;
 using System.Threading.Tasks;
 using BTCPayServer.Abstractions.Constants;
@@ -8,7 +9,6 @@ using BTCPayServer.Client;
 using BTCPayServer.Data;
 using BTCPayServer.Payments;
 using BTCPayServer.Payments.Lightning;
-using BTCPayServer.Plugins.Tando.Helper;
 using BTCPayServer.Plugins.Tando.Services;
 using BTCPayServer.Plugins.Tando.ViewModels;
 using BTCPayServer.Services.Stores;
@@ -19,22 +19,27 @@ using Newtonsoft.Json.Linq;
 namespace BTCPayServer.Plugins.MassStoreGenerator;
 
 [Route("~/plugins/api/tando/")]
-[Authorize(Policy = Policies.CanModifyStoreSettingsUnscoped, AuthenticationSchemes = AuthenticationSchemes.Greenfield)]
+[Authorize(
+    Policy = Policies.CanModifyStoreSettingsUnscoped,
+    AuthenticationSchemes = AuthenticationSchemes.Greenfield
+)]
 [IgnoreAntiforgeryToken]
-public class TandoOnboardingController(StoreRepository storeRepository, TandoSubscriptionService subscriptionService, 
-    TandoProductProvisioningService productProvisioningService, TandoLightningProvisionerFactory lightningProvisionerFactor) : Controller
+public class TandoOnboardingController(StoreRepository storeRepository, TandoSubscriptionService subscriptionService,
+    TandoProductProvisioningService productProvisioningService, TandoLightningProvisionerFactory lightningProvisionerFactor,
+    PhoneVerificationService phoneVerification) : Controller
 {
     private const string PreferredRateSource = "bitcoinkenya";
     private const string DefaultCurrency = "KES";
     private const string PhoneMetadataKey = "tandoPhoneNumber";
     private const string PlanMetadataKey = "tandoSubscriptionPlanId";
 
+
     [HttpGet("subscription/status")]
     public async Task<IActionResult> SubscriptionStatus([FromQuery] string phoneNumber)
     {
         var normalizedPhone = KenyanPhoneNumber.Normalize(phoneNumber);
         if (normalizedPhone == null)
-            return BadRequest(new { error = "invalid_phone_number", detail = "Expected a Kenyan MSISDN, e.g. 0712345678 or +254712345678." });
+            return BadRequest(new { error = "invalid_phone_number", detail = "Expected a Safaricom MSISDN, e.g. 0712345678 or +254712345678." });
 
         var status = await subscriptionService.GetStatus(normalizedPhone);
         return Ok(status);
@@ -50,6 +55,18 @@ public class TandoOnboardingController(StoreRepository storeRepository, TandoSub
         return Ok(new { configured = true, plans });
     }
 
+    [HttpGet("verification/status")]
+    public async Task<IActionResult> VerificationStatus()
+    {
+        var verifier = phoneVerification.Active;
+        return Ok(new
+        {
+            enabled = verifier is not null,
+            mode = verifier?.Name,
+            configured = verifier is not null && await verifier.IsConfigured()
+        });
+    }
+
     [HttpPost("signup")]
     public async Task<IActionResult> Signup([FromBody] TandoSignupRequest request, CancellationToken cancellationToken)
     {
@@ -60,6 +77,11 @@ public class TandoOnboardingController(StoreRepository storeRepository, TandoSub
         if (normalizedPhone is null)
             return BadRequest(new { error = "invalid_phone_number", detail = "Expected a Kenyan MSISDN, e.g. 0712345678 or +254712345678." });
 
+        var verification = await phoneVerification.Verify(normalizedPhone, request.IdType, request.IdNumber, cancellationToken);
+        if (VerificationError(verification) is { } verificationError)
+            return verificationError;
+
+        var phoneNumberVerified = verification == PhoneVerificationOutcome.Verified;
         var status = await subscriptionService.GetStatus(normalizedPhone);
         if (!status.Configured)
         {
@@ -96,7 +118,8 @@ public class TandoOnboardingController(StoreRepository storeRepository, TandoSub
                 PhoneNumber = normalizedPhone,
                 AlreadyExisted = true,
                 PosAppId = posAppId,
-                CartAppId = cartAppId
+                CartAppId = cartAppId,
+                PhoneNumberVerified = phoneNumberVerified
             });
         }
         var store = await storeRepository.GetDefaultStoreTemplate();
@@ -120,19 +143,11 @@ public class TandoOnboardingController(StoreRepository storeRepository, TandoSub
             PhoneNumber = normalizedPhone,
             AlreadyExisted = false,
             PosAppId = newPosAppId,
-            CartAppId = newCartAppId
+            CartAppId = newCartAppId,
+            PhoneNumberVerified = phoneNumberVerified
         });
     }
 
-    private async Task RefreshPlanMetadata(StoreData store, string? currentPlanId)
-    {
-        var blob = store.GetStoreBlob();
-        if (blob.AdditionalData[PlanMetadataKey]?.ToString() == currentPlanId) return; 
-
-        blob.AdditionalData[PlanMetadataKey] = currentPlanId;
-        store.SetStoreBlob(blob);
-        await storeRepository.UpdateStore(store);
-    }
 
     [HttpPut("stores/{storeId}/lightning/connect")]
     public async Task<IActionResult> ConnectLightning(string storeId, [FromBody] TandoConnectLightningRequest request)
@@ -174,5 +189,25 @@ public class TandoOnboardingController(StoreRepository storeRepository, TandoSub
         store.SetStoreBlob(blob);
         await storeRepository.UpdateStore(store);
         return Ok(new { storeId, paymentMethodId = paymentMethodId.ToString() });
+    }
+
+    private IActionResult? VerificationError(PhoneVerificationOutcome outcome) => outcome switch
+    {
+        PhoneVerificationOutcome.Skipped or PhoneVerificationOutcome.Verified => null,
+        PhoneVerificationOutcome.IdNumberRequired => BadRequest(new { error = "id_number_required", detail = "An ID number is required to verify the phone number." }),
+        PhoneVerificationOutcome.InvalidIdType => BadRequest(new { error = "invalid_id_type", detail = "Expected 01 (National ID), 02 (Military ID) or 05 (Passport)." }),
+        PhoneVerificationOutcome.Mismatch => BadRequest(new { error = "phone_id_mismatch", detail = "The phone number is not registered under this ID." }),
+        PhoneVerificationOutcome.NotConfigured => StatusCode(503, new { error = "phone_verification_not_configured", message = "Phone verification isn't set up yet. Please contact the Tando team." }),
+        _ => StatusCode(503, new { error = "phone_verification_unavailable", message = "Couldn't verify the phone number right now. Please try again later." })
+    };
+
+    private async Task RefreshPlanMetadata(StoreData store, string? currentPlanId)
+    {
+        var blob = store.GetStoreBlob();
+        if (blob.AdditionalData[PlanMetadataKey]?.ToString() == currentPlanId) return;
+
+        blob.AdditionalData[PlanMetadataKey] = currentPlanId;
+        store.SetStoreBlob(blob);
+        await storeRepository.UpdateStore(store);
     }
 }

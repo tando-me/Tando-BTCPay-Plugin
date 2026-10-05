@@ -28,6 +28,25 @@ tags:
     description: Secondary/staff account management (Phase 5)
 
 paths:
+  /verification/status:
+    get:
+      summary: Report the active signup phone verification provider
+      description: Mock mode requires explicit configuration and the Development environment.
+      responses:
+        "200":
+          description: Active provider mode
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mode: { type: string, enum: [Daraja, Mock] }
+                  mock: { type: boolean }
+  /daraja/status:
+    get:
+      summary: Report Daraja credential configuration
+      responses:
+        "200": { description: Credential presence and environment (secrets are not returned) }
   /subscription/status:
     get:
       tags: [Subscription]
@@ -80,7 +99,9 @@ paths:
         is reused (AlreadyExisted=true) rather than duplicated. Auto-enrolls a new
         subscriber into a free trial of the operator-designated plan if the phone
         number has no active subscription yet. Also provisions the Keypad and Cart
-        POS apps on the store.
+        POS apps on the store. Phone and ID verification must succeed before any
+        subscription or store creation. Missing verification configuration or provider
+        failures block signup with 503; an explicit identity mismatch returns 400.
       security: [{ ApiKey: [CanModifyStoreSettingsUnscoped] }]
       requestBody:
         required: true
@@ -96,7 +117,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "503":
-          description: Subscription plan not configured / not usable
+          description: Verification unavailable or unconfigured, or subscription plan not usable
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorResponse" }
@@ -463,9 +484,11 @@ components:
 
     TandoSignupRequest:
       type: object
-      required: [phoneNumber]
+      required: [phoneNumber, idNumber]
       properties:
         phoneNumber: { type: string, example: "0712345678" }
+        idNumber: { type: string, description: ID number registered to the phone }
+        idType: { type: string, enum: ["01", "02", "05"], default: "01", description: "01 National ID, 02 Military ID, 05 Passport" }
 
     TandoSignupResponse:
       type: object
@@ -473,6 +496,7 @@ components:
         storeId: { type: string }
         phoneNumber: { type: string }
         alreadyExisted: { type: boolean }
+        phoneNumberVerified: { type: boolean, description: Signup identity verification succeeded; synthetic in explicit Development mock mode }
         posAppId: { type: string, nullable: true }
         cartAppId: { type: string, nullable: true }
 

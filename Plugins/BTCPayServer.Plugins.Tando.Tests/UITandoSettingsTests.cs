@@ -1,4 +1,5 @@
-﻿using BTCPayServer.Plugins.Tando.ViewModels;
+using BTCPayServer.Plugins.Tando.Services;
+using BTCPayServer.Plugins.Tando.ViewModels;
 using BTCPayServer.Tests;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Playwright;
@@ -55,13 +56,17 @@ public class UITandoSettingsTests : PlaywrightBaseTest
         var result = await controller.Settings(new TandoSettingsViewModel
         {
             SubscriptionOfferingId = offering.Id,
-            SubscriptionPlanId = plan.Id
+            SubscriptionPlanId = plan.Id,
+            TreasuryLightningAddress = " treasury@tando.example ",
+            MaxPayoutAmount = 500m
         });
 
-        // Either redirects back with a success message, or re-renders the view with the
-        // saved state reflected - accept whichever this controller actually does rather
-        // than assume, and assert on the model where possible.
-        Assert.True(result is RedirectToActionResult || result is ViewResult);
+        Assert.IsType<RedirectToActionResult>(result);
+        var saved = await ServerTester.PayTester.GetService<TandoSubscriptionService>().GetSettings();
+        Assert.Equal(offering.Id, saved.SubscriptionOfferingId);
+        Assert.Equal(plan.Id, saved.SubscriptionPlanId);
+        Assert.Equal("treasury@tando.example", saved.TreasuryLightningAddress);
+        Assert.Equal(500m, saved.MaxPayoutAmount);
     }
 
     [Fact]
@@ -94,4 +99,33 @@ public class UITandoSettingsTests : PlaywrightBaseTest
         var body = await response.TextAsync();
         Assert.Contains("openapi", body, StringComparison.OrdinalIgnoreCase);
     }
+    [Theory]
+    [InlineData("invalid-address", 100, "TreasuryLightningAddress")]
+    [InlineData("treasury@tando.example", 0, "MaxPayoutAmount")]
+    [InlineData("treasury@tando.example", -1, "MaxPayoutAmount")]
+    public async Task Settings_InvalidTreasuryOrLimit_DoesNotOverwriteSettings(string address, int limit, string field)
+    {
+        var admin = await NewAdminAccount();
+        var client = await admin.CreateClient();
+        var offering = await client.CreateOffering(admin.StoreId, new() { AppName = "Validation Test" });
+        var plan = await client.CreateOfferingPlan(admin.StoreId, offering.Id, new() { Name = "Plan", Price = 0m, TrialDays = 7 });
+        var service = ServerTester.PayTester.GetService<TandoSubscriptionService>();
+        await service.SaveSettings(new TandoSettings
+        {
+            SubscriptionOfferingId = offering.Id, SubscriptionPlanId = plan.Id,
+            TreasuryLightningAddress = "saved@tando.example", MaxPayoutAmount = 250m
+        });
+        var controller = ServerTester.PayTester.GetController<UITandoSettingsController>(admin.UserId, admin.StoreId, admin.IsAdmin);
+        var result = await controller.Settings(new TandoSettingsViewModel
+        {
+            SubscriptionOfferingId = offering.Id, SubscriptionPlanId = plan.Id,
+            TreasuryLightningAddress = address, MaxPayoutAmount = limit
+        });
+        Assert.IsType<ViewResult>(result);
+        Assert.NotEmpty(controller.ModelState[field]!.Errors);
+        var saved = await service.GetSettings();
+        Assert.Equal("saved@tando.example", saved.TreasuryLightningAddress);
+        Assert.Equal(250m, saved.MaxPayoutAmount);
+    }
+
 }

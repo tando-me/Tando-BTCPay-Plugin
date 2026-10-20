@@ -79,7 +79,7 @@ The server comes up at <http://localhost:14142>. On your first visit, register a
 ### Verify the plugin loaded
 
 - The **Tando** item appears in the sidebar navigation once you have a store selected.
-- The plugin is listed under **Server Settings → Plugins**.
+- The plugin is listed under **Plugins → Installed Plugins** (the plugin icon in the top navigation bar, or go directly to <http://localhost:14142/server/plugins>). This menu is only visible to the server admin.
 
 ## 5. Make a test Lightning payment
 

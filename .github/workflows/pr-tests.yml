@@ -26,6 +26,9 @@ jobs:
       - name: Run fast tests
         run: dotnet test --project Plugins/BTCPayServer.Plugins.Tando.Tests --filter-trait "FastTest=FastTest" --report-xunit-trx --report-xunit-trx-filename fast-tests.trx --results-directory /tmp/TestResults
 
+      - name: Fail if no tests ran
+        run: bash .github/scripts/assert-tests-ran.sh /tmp/TestResults
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
